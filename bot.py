@@ -1,105 +1,112 @@
 import os
 import logging
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
+# Configuração de logs para monitoramento no Render
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-from database import init_db, listar_produtos, buscar_produto, criar_pedido
-from ia import responder_com_ia
+# Token do Telegram pego da variável de ambiente no Render
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-PORT = int(os.environ.get("PORT", 10000))
-RENDER_URL = os.environ.get("RENDER_URL")  # ex: https://seu-app.onrender.com
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Olá! 👋 Bem-vindo(a) à nossa loja.\n\n"
-        "Use /produtos para ver o catálogo\n"
-        "Ou me pergunte qualquer coisa sobre nossos produtos!"
-    )
-
-
-async def produtos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    itens = listar_produtos()
-    if not itens:
-        await update.message.reply_text("Ainda não temos produtos cadastrados.")
-        return
-
-    botoes = [
-        [InlineKeyboardButton(f"{p['nome']} - R$ {p['preco']:.2f}", callback_data=f"ver_{p['id']}")]
-        for p in itens
+# Função do menu principal
+def menu_principal():
+    keyboard = [
+        [InlineKeyboardButton("📦 Ver Produtos / Catálogo", callback_data="catalogo")],
+        [InlineKeyboardButton("💳 Formas de Pagamento", callback_data="pagamento")],
+        [InlineKeyboardButton("🛍️ Como Fazer um Pedido", callback_data="comprar")],
+        [InlineKeyboardButton("💬 Falar com Atendente", callback_data="suporte")]
     ]
-    await update.message.reply_text(
-        "🛍️ Nosso catálogo:", reply_markup=InlineKeyboardMarkup(botoes)
+    return InlineKeyboardMarkup(keyboard)
+
+# Comando /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    mensagem = (
+        "👋 *Seja bem-vindo ao nosso atendimento virtual!*\n\n"
+        "Selecione uma das opções abaixo para que eu possa te ajudar:"
     )
+    await update.message.reply_text(mensagem, parse_mode="Markdown", reply_markup=menu_principal())
 
-
-async def ver_produto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Manipulador das escolhas nos botões
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
-    produto_id = int(query.data.split("_")[1])
-    produto = buscar_produto(produto_id)
+    # 1. Catálogo de Produtos
+    if query.data == "catalogo":
+        texto = (
+            "📋 *NOSSO CATÁLOGO DE PRODUTOS*\n\n"
+            "🔹 *Produto 1* - R$ 50,00\n"
+            "_Descrição breve do produto 1_\n\n"
+            "🔹 *Produto 2* - R$ 80,00\n"
+            "_Descrição breve do produto 2_\n\n"
+            "🔹 *Produto 3* - R$ 120,00\n"
+            "_Descrição breve do produto 3_\n\n"
+            "💡 Para fazer o pedido de qualquer item, escolha a opção *Como Fazer um Pedido* no menu."
+        )
+        keyboard = [[InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu")]]
+        await query.edit_message_text(text=texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    if not produto:
-        await query.edit_message_text("Produto não encontrado.")
-        return
+    # 2. Formas de Pagamento
+    elif query.data == "pagamento":
+        texto = (
+            "💳 *FORMAS DE PAGAMENTO ACEITAS*\n\n"
+            "✅ *Pix* (Aprovação imediata)\n"
+            "✅ *Cartão de Crédito / Débito*\n"
+            "✅ *Boleto Bancário*\n\n"
+            "📌 Envie o comprovante após a transferência para validar o pedido."
+        )
+        keyboard = [[InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu")]]
+        await query.edit_message_text(text=texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    criar_pedido(query.message.chat_id, produto_id)
+    # 3. Como Comprar
+    elif query.data == "comprar":
+        texto = (
+            "🛍️ *COMO REALIZAR SEU PEDIDO*\n\n"
+            "1. Escolha os itens desejados no catálogo.\n"
+            "2. Clique no botão abaixo para ir direto para o nosso atendimento humano.\n"
+            "3. Envie a lista dos produtos e seu endereço de entrega!"
+        )
+        keyboard = [
+            [InlineKeyboardButton("💬 Chamar no WhatsApp", url="https://wa.me/5500000000000")],
+            [InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu")]
+        ]
+        await query.edit_message_text(text=texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    texto = (
-        f"📦 *{produto['nome']}*\n\n"
-        f"{produto['descricao'] or ''}\n\n"
-        f"💰 R$ {produto['preco']:.2f}\n\n"
-        f"Para comprar, clique no link abaixo:\n{produto['link_pagamento']}"
-    )
-    await query.edit_message_text(texto, parse_mode="Markdown")
+    # 4. Atendimento Humano
+    elif query.data == "suporte":
+        texto = (
+            "📞 *ATENDIMENTO AO CLIENTE*\n\n"
+            "⏰ *Horário de Atendimento:*\n"
+            "Segunda a Sexta: 08:00h às 18:00h\n"
+            "Sábado: 08:00h às 12:00h\n\n"
+            "Clique abaixo para falar direto com o nosso suporte:"
+        )
+        keyboard = [
+            [InlineKeyboardButton("💬 Falar com Suporte no WhatsApp", url="https://wa.me/5500000000000")],
+            [InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu")]
+        ]
+        await query.edit_message_text(text=texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-
-async def mensagem_livre(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Qualquer mensagem de texto que não seja comando vai pra IA responder."""
-    itens = listar_produtos()
-    catalogo_texto = "\n".join(
-        f"- {p['nome']}: R$ {p['preco']:.2f} - {p['descricao'] or ''}" for p in itens
-    ) or "Nenhum produto cadastrado ainda."
-
-    resposta = responder_com_ia(update.message.text, catalogo_texto)
-    await update.message.reply_text(resposta)
-
+    # 5. Voltar ao Menu Principal
+    elif query.data == "menu":
+        mensagem = "Selecione uma das opções abaixo para que eu possa te ajudar:"
+        await query.edit_message_text(text=mensagem, reply_markup=menu_principal())
 
 def main():
-    init_db()
+    if not TELEGRAM_TOKEN:
+        print("ERRO: TELEGRAM_TOKEN não configurado nas variáveis de ambiente.")
+        return
 
-    app = Application.builder().token(BOT_TOKEN).build()
-
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("produtos", produtos))
-    app.add_handler(CallbackQueryHandler(ver_produto, pattern=r"^ver_\d+$"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_livre))
+    app.add_handler(CallbackQueryHandler(button_handler))
 
-    if RENDER_URL:
-        # Modo webhook (produção no Render)
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=BOT_TOKEN,
-            webhook_url=f"{RENDER_URL}/{BOT_TOKEN}",
-        )
-    else:
-        # Modo polling (testes locais / Termux)
-        app.run_polling()
-
+    print("Bot sem IA rodando perfeitamente...")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
