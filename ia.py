@@ -22,29 +22,44 @@ Catálogo atual:
 Pergunta do cliente: {pergunta_cliente}
 """
 
-    try:
-        resp = requests.post(
-            GEMINI_URL, GEMINI_URL ="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+import os
+import requests
 
-            headers={
-                "Content-Type": "application/json",
-                "X-goog-api-key": GEMINI_API_KEY,
-            },
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "maxOutputTokens": 300,
-                },
-            },
-            timeout=20,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+headers = {
+    "Content-Type": "application/json",
+    "X-goog-api-key": os.getenv("GEMINI_API_KEY")
+}
+
+def responder_com_ia(pergunta_cliente, catalogo_texto):
+    prompt = f"""Você é um atendente virtual de uma loja.
+Seja simpático, direto e breve (poucas frases).
+Use o catálogo abaixo para responder dúvidas sobre produtos.
+Se o cliente quiser comprar, oriente a usar o comando /comprar.
+Se a pergunta não tiver relação com a loja, responda de forma cortês.
+
+Catálogo atual:
+{catalogo_texto}
+
+Pergunta do cliente: {pergunta_cliente}
+"""
+
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+
+    try:
+        response = requests.post(GEMINI_URL, json=payload, headers=headers)
+        res_data = response.json()
+        
+        if response.status_code == 200:
+            return res_data['candidates'][0]['content']['parts'][0]['text']
+        else:
+            print(f"Erro Gemini API: {res_data}")
+            return "Desculpe, ocorreu um erro ao processar sua resposta."
     except Exception as e:
-        print(f"Erro na IA: {e}")
-        return (
-            "Desculpa, tive um problema para responder agora. "
-            "Tenta de novo em instantes ou use /produtos para ver o catálogo."
-        )
+        print(f"Erro na requisição: {e}")
+        return "Desculpe, serviço indisponível no momento."
