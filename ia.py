@@ -1,11 +1,10 @@
 import os
 import requests
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
-)
+headers={
+    "Content-Type": "application/json",
+    "X-goog-api-key": os.getenv("GEMINI_API_KEY"),
+},
 
 
 def responder_com_ia(pergunta_cliente, catalogo_texto):
@@ -25,7 +24,8 @@ Pergunta do cliente: {pergunta_cliente}
 
     try:
         resp = requests.post(
-            GEMINI_URL,
+            GEMINI_URL, GEMINI_URL ="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+
             headers={
                 "Content-Type": "application/json",
                 "X-goog-api-key": GEMINI_API_KEY,
